@@ -55,7 +55,7 @@ class Course:
 
     @staticmethod
     def from_dict(raw_course: dict) -> "Course":
-        tasks = [task.from_dict() for task in raw_course.get("tasks", [])]
+        tasks = [Task.from_dict(task) for task in raw_course.get("tasks", [])]
         return Course(
             name=raw_course["name"],
             color=raw_course["color"],
@@ -170,7 +170,7 @@ def render_blocked_time_controls(week_start: date) -> None:
                     st.rerun()
 
 
-def build_schedule(week_start: date) -> Tuple[Dict[Tuple[int, int], str], List[str]]:
+def build_schedule(week_start: date) -> tuple[dict[tuple[int, int], str], dict[tuple[int, int], str], list[str]]:
     """Returns (grid_map, diagnostics). grid value is one of free/blocked/study/due."""
     grid: Dict[Tuple[int, int], str] = {(d, h): "free" for d in range(7) for h in range(24)}
     labels: Dict[Tuple[int, int], str] = {}
@@ -305,29 +305,6 @@ def render_weekly_schedule() -> None:
                             save_state()
                             st.success("Task study hours updated.")
                             st.rerun()
-
-    html = [
-        "<table style='width:100%; border-collapse:collapse; font-size:0.78rem;'>",
-        "<thead><tr><th style='position:sticky;left:0;background:#111;padding:4px;border:1px solid #333;'>Hour</th>",
-    ]
-    for day in DAYS:
-        html.append(f"<th style='padding:4px;border:1px solid #333;'>{day}</th>")
-    html.append("</tr></thead><tbody>")
-
-    colors = {"free": "#1f2937", "blocked": "#dc2626", "study": "#16a34a", "due": "#eab308"}
-    for hour in range(24):
-        html.append(f"<tr><td style='padding:4px;border:1px solid #333;background:#111;'>{hour:02d}:00</td>")
-        for day_idx in range(7):
-            state = grid[(day_idx, hour)]
-            label = labels.get((day_idx, hour), "")
-            html.append(
-                f"<td title='{label}' style='padding:4px;border:1px solid #333;background:{colors[state]}; min-width:70px; height:28px;'></td>"
-            )
-        html.append("</tr>")
-    html.append("</tbody></table>")
-
-    st.markdown("**Legend:** 🟥 Blocked  🟨 Due  🟩 Study")
-    st.markdown("".join(html), unsafe_allow_html=True)
 
 
 def render_board() -> None:

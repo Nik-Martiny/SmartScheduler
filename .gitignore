@@ -1,1 +1,3 @@
-.venv
+.venv/*
+.idea/*
+scheduler_state.json
