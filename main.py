@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import streamlit as st
-import streamlit.components.v1 as components
+from components.weekly_scheduler import weekly_scheduler_component
 
 STORAGE_PATH = Path(__file__).with_name("scheduler_state.json")
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -170,116 +170,6 @@ def render_blocked_time_controls(week_start: date) -> None:
                     st.rerun()
 
 
-def render_selectable_week_grid(grid: Dict[Tuple[int, int], str]) -> List[Tuple[int, int]]:
-    """Interactive slot picker supporting click, shift-click range, and drag select."""
-    preset = st.session_state.get("selected_slots", [])
-    preset_js = json.dumps(preset)
-    grid_js = json.dumps({f"{d}-{h}": grid[(d, h)] for d in range(7) for h in range(24)})
-    days_js = json.dumps(DAYS)
-
-    html = f"""
-    <div>
-      <style>
-        .sched-table {{ border-collapse: collapse; width: 100%; user-select: none; }}
-        .sched-table th, .sched-table td {{ border: 1px solid #333; text-align: center; font-size: 11px; }}
-        .sched-table th {{ background: #111; padding: 4px; }}
-        .hour-col {{ background: #111; padding: 4px; width: 54px; }}
-        .slot {{ width: 60px; height: 24px; cursor: pointer; }}
-        .free {{ background: #1f2937; }} .blocked {{ background: #dc2626; }}
-        .study {{ background: #16a34a; }} .due {{ background: #eab308; }}
-        .selected {{ box-shadow: inset 0 0 0 3px #2563eb; }}
-      </style>
-      <table class="sched-table" id="sched">
-        <thead><tr><th>Hour</th></tr></thead><tbody></tbody>
-      </table>
-    </div>
-    <script>
-      const DAYS = {days_js};
-      const GRID = {grid_js};
-      const PRESET = {preset_js};
-      const tbody = document.querySelector("#sched tbody");
-      const headerRow = document.querySelector("#sched thead tr");
-      DAYS.forEach(day => {{
-        const th = document.createElement("th");
-        th.textContent = day;
-        headerRow.appendChild(th);
-      }});
-
-      const selected = new Set(PRESET.map(x => `${{x[0]}}-${{x[1]}}`));
-      let mouseDown = false;
-      let lastCell = null;
-      let dragModeAdd = true;
-
-      function applySelectionUi() {{
-        document.querySelectorAll(".slot").forEach(el => {{
-          const key = el.dataset.key;
-          if (selected.has(key)) el.classList.add("selected");
-          else el.classList.remove("selected");
-        }});
-      }}
-
-      function toggleCell(cell, forceAdd=null) {{
-        const key = cell.dataset.key;
-        if (forceAdd === true) selected.add(key);
-        else if (forceAdd === false) selected.delete(key);
-        else if (selected.has(key)) selected.delete(key);
-        else selected.add(key);
-      }}
-
-      for (let h = 0; h < 24; h++) {{
-        const tr = document.createElement("tr");
-        const hourTd = document.createElement("td");
-        hourTd.className = "hour-col";
-        hourTd.textContent = `${{String(h).padStart(2, "0")}}:00`;
-        tr.appendChild(hourTd);
-        for (let d = 0; d < 7; d++) {{
-          const key = `${{d}}-${{h}}`;
-          const td = document.createElement("td");
-          td.className = `slot ${{GRID[key] || "free"}}`;
-          td.dataset.key = key;
-          td.onmousedown = (e) => {{
-            mouseDown = true;
-            dragModeAdd = !selected.has(key);
-            if (e.shiftKey && lastCell) {{
-              const [ld, lh] = lastCell.split("-").map(Number);
-              const [cd, ch] = key.split("-").map(Number);
-              const minD = Math.min(ld, cd), maxD = Math.max(ld, cd);
-              const minH = Math.min(lh, ch), maxH = Math.max(lh, ch);
-              document.querySelectorAll(".slot").forEach(c => {{
-                const [d2, h2] = c.dataset.key.split("-").map(Number);
-                if (d2 >= minD && d2 <= maxD && h2 >= minH && h2 <= maxH) toggleCell(c, true);
-              }});
-            }} else toggleCell(td, null);
-            lastCell = key;
-            applySelectionUi();
-          }};
-          td.onmouseover = () => {{
-            if (!mouseDown) return;
-            toggleCell(td, dragModeAdd);
-            lastCell = key;
-            applySelectionUi();
-          }};
-          tr.appendChild(td);
-        }}
-        tbody.appendChild(tr);
-      }}
-      document.addEventListener("mouseup", () => {{ mouseDown = false; }});
-      applySelectionUi();
-
-      function sync() {{
-        const val = Array.from(selected).map(k => k.split("-").map(Number));
-        if (window.Streamlit) window.Streamlit.setComponentValue(val);
-      }}
-      setInterval(sync, 300);
-      sync();
-    </script>
-    """
-    selected_slots = components.html(html, height=760)
-    if selected_slots is None:
-        return preset
-    return [(int(d), int(h)) for d, h in selected_slots]
-
-
 def build_schedule(week_start: date) -> Tuple[Dict[Tuple[int, int], str], List[str]]:
     """Returns (grid_map, diagnostics). grid value is one of free/blocked/study/due."""
     grid: Dict[Tuple[int, int], str] = {(d, h): "free" for d in range(7) for h in range(24)}
@@ -355,7 +245,12 @@ def render_weekly_schedule() -> None:
 
     st.markdown("#### Interactive weekly editor")
     st.caption("Click to select, drag across slots, or Shift+Click to select a rectangle.")
-    selected_slots = render_selectable_week_grid(grid)
+    selected_slots = weekly_scheduler_component(
+        grid=grid,
+        days=DAYS,
+        selected_slots=st.session_state.get("selected_slots", []),
+        key="weekly_scheduler_grid",
+    )
     st.session_state.selected_slots = selected_slots
     st.caption(f"Selected slots: {len(selected_slots)}")
 
