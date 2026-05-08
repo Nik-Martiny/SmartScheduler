@@ -11,7 +11,8 @@ class Task:
     """A child task that belongs to one Course."""
 
     title: str
-    details: str = ""
+    category: str
+    estimated_hours: float
 
 
 @dataclass
@@ -23,8 +24,10 @@ class Course:
     difficulty: int
     tasks: List[Task] = field(default_factory=list)
 
-    def add_task(self, title: str, details: str = "") -> None:
-        self.tasks.append(Task(title=title, details=details))
+    def add_task(self, title: str, category: str, estimated_hours: float) -> None:
+        self.tasks.append(
+            Task(title=title, category=category, estimated_hours=estimated_hours)
+        )
 
     def remove_task(self, task_idx: int) -> None:
         if 0 <= task_idx < len(self.tasks):
@@ -120,10 +123,18 @@ def render_board() -> None:
 
             with st.form(f"add_task_form_{idx}", clear_on_submit=True):
                 task_title = st.text_input("Task", key=f"task_title_{idx}")
-                task_details = st.text_area(
-                    "Task Details (optional)",
-                    key=f"task_details_{idx}",
-                    height=80,
+                task_category = st.selectbox(
+                    "Category",
+                    options=["Assignment", "Quiz", "Exam"],
+                    key=f"task_category_{idx}",
+                )
+                estimated_hours = st.number_input(
+                    "Estimated Hours",
+                    min_value=0.5,
+                    max_value=100.0,
+                    value=1.0,
+                    step=0.5,
+                    key=f"estimated_hours_{idx}",
                 )
                 add_task_submitted = st.form_submit_button(
                     "Add Task", use_container_width=True
@@ -133,7 +144,7 @@ def render_board() -> None:
                     if not task_title.strip():
                         st.warning("Task title cannot be empty.")
                     else:
-                        course.add_task(task_title, task_details)
+                        course.add_task(task_title, task_category, float(estimated_hours))
                         st.rerun()
 
             st.markdown("#### Tasks")
@@ -150,7 +161,8 @@ def render_board() -> None:
                             margin-bottom: 0.55rem;
                         ">
                             <strong>{task.title}</strong>
-                            <p style="margin: 0.3rem 0 0 0; opacity: 0.8;">{task.details}</p>
+                            <p style="margin: 0.3rem 0 0 0; opacity: 0.85;">Category: {task.category}</p>
+                            <p style="margin: 0.15rem 0 0 0; opacity: 0.75;">Estimated Hours: {task.estimated_hours:g}</p>
                         </div>
                         """,
                         unsafe_allow_html=True,
