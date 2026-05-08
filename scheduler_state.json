@@ -1,0 +1,17 @@
+{
+  "courses": [
+    {
+      "name": "Linear Algebra",
+      "color": "#4F46E5",
+      "difficulty": 5,
+      "tasks": [
+        {
+          "title": "gfd",
+          "due_date": "2026-05-08T14:03:00",
+          "category": "Assignment",
+          "estimated_hours": 1.0
+        }
+      ]
+    }
+  ]
+}
