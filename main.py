@@ -26,16 +26,29 @@ class Course:
     def add_task(self, title: str, details: str = "") -> None:
         self.tasks.append(Task(title=title, details=details))
 
+    def remove_task(self, task_idx: int) -> None:
+        if 0 <= task_idx < len(self.tasks):
+            self.tasks.pop(task_idx)
+
 
 def init_state() -> None:
     if "courses" not in st.session_state:
         st.session_state.courses: List[Course] = []
+    if "pending_course_delete" not in st.session_state:
+        st.session_state.pending_course_delete = None
+    if "pending_task_delete" not in st.session_state:
+        st.session_state.pending_task_delete = None
 
 
 def add_course(name: str, color: str, difficulty: int) -> None:
     st.session_state.courses.append(
         Course(name=name.strip(), color=color, difficulty=difficulty)
     )
+
+
+def remove_course(course_idx: int) -> None:
+    if 0 <= course_idx < len(st.session_state.courses):
+        st.session_state.courses.pop(course_idx)
 
 
 def render_course_controls() -> None:
@@ -87,6 +100,24 @@ def render_board() -> None:
                 unsafe_allow_html=True,
             )
 
+            if st.button("🗑️ Remove Course", key=f"remove_course_btn_{idx}", use_container_width=True):
+                st.session_state.pending_course_delete = idx
+
+            if st.session_state.pending_course_delete == idx:
+                st.warning(
+                    f"Are you sure you want to remove '{course.name}'? This deletes all tasks in this course."
+                )
+                confirm_col, cancel_col = st.columns(2)
+                with confirm_col:
+                    if st.button("Confirm Course Removal", key=f"confirm_remove_course_{idx}", use_container_width=True):
+                        remove_course(idx)
+                        st.session_state.pending_course_delete = None
+                        st.rerun()
+                with cancel_col:
+                    if st.button("Cancel", key=f"cancel_remove_course_{idx}", use_container_width=True):
+                        st.session_state.pending_course_delete = None
+                        st.rerun()
+
             with st.form(f"add_task_form_{idx}", clear_on_submit=True):
                 task_title = st.text_input("Task", key=f"task_title_{idx}")
                 task_details = st.text_area(
@@ -109,7 +140,7 @@ def render_board() -> None:
             if not course.tasks:
                 st.caption("No tasks for this course yet.")
             else:
-                for task in course.tasks:
+                for task_idx, task in enumerate(course.tasks):
                     st.markdown(
                         f"""
                         <div style="
@@ -124,6 +155,34 @@ def render_board() -> None:
                         """,
                         unsafe_allow_html=True,
                     )
+
+                    if st.button(
+                        "Remove Task",
+                        key=f"remove_task_btn_{idx}_{task_idx}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.pending_task_delete = (idx, task_idx)
+
+                    if st.session_state.pending_task_delete == (idx, task_idx):
+                        st.warning(f"Remove task '{task.title}' from '{course.name}'?")
+                        confirm_col, cancel_col = st.columns(2)
+                        with confirm_col:
+                            if st.button(
+                                "Confirm Task Removal",
+                                key=f"confirm_remove_task_{idx}_{task_idx}",
+                                use_container_width=True,
+                            ):
+                                course.remove_task(task_idx)
+                                st.session_state.pending_task_delete = None
+                                st.rerun()
+                        with cancel_col:
+                            if st.button(
+                                "Cancel",
+                                key=f"cancel_remove_task_{idx}_{task_idx}",
+                                use_container_width=True,
+                            ):
+                                st.session_state.pending_task_delete = None
+                                st.rerun()
 
 
 def main() -> None:
