@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Tuple
 
 import streamlit as st
 
 STORAGE_PATH = Path(__file__).with_name("scheduler_state.json")
+DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 
 @dataclass
@@ -62,25 +63,34 @@ class Course:
         )
 
 
-def load_courses() -> List[Course]:
+def load_state() -> dict:
     if not STORAGE_PATH.exists():
-        return []
+        return {"courses": [], "blocked_times": []}
 
     try:
         raw_state = json.loads(STORAGE_PATH.read_text(encoding="utf-8"))
-        return [Course.from_dict(course) for course in raw_state.get("courses", [])]
+        if "blocked_times" not in raw_state:
+            raw_state["blocked_times"] = []
+        return raw_state
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-        return []
+        return {"courses": [], "blocked_times": []}
 
 
-def save_courses() -> None:
-    payload = {"courses": [course.to_dict() for course in st.session_state.courses]}
+def save_state() -> None:
+    payload = {
+        "courses": [course.to_dict() for course in st.session_state.courses],
+        "blocked_times": st.session_state.blocked_times,
+    }
     STORAGE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def init_state() -> None:
+    raw_state = load_state()
+
     if "courses" not in st.session_state:
-        st.session_state.courses = load_courses()
+        st.session_state.courses = [Course.from_dict(course) for course in raw_state.get("courses", [])]
+    if "blocked_times" not in st.session_state:
+        st.session_state.blocked_times = raw_state.get("blocked_times", [])
     if "pending_course_delete" not in st.session_state:
         st.session_state.pending_course_delete = None
     if "pending_task_delete" not in st.session_state:
@@ -88,21 +98,23 @@ def init_state() -> None:
 
 
 def add_course(name: str, color: str, difficulty: int) -> None:
-    st.session_state.courses.append(
-        Course(name=name.strip(), color=color, difficulty=difficulty)
-    )
-    save_courses()
+    st.session_state.courses.append(Course(name=name.strip(), color=color, difficulty=difficulty))
+    save_state()
 
 
 def remove_course(course_idx: int) -> None:
     if 0 <= course_idx < len(st.session_state.courses):
         st.session_state.courses.pop(course_idx)
-        save_courses()
+        save_state()
+
+
+def get_week_start(today: date) -> date:
+    return today - timedelta(days=(today.weekday() + 1) % 7)
 
 
 def render_course_controls() -> None:
     st.title("📚 Smart Scheduler")
-    st.caption("Kanban-style course planning board")
+    st.caption("Course tracker + automatic weekly study planner")
 
     with st.popover("➕ Add Course", use_container_width=False):
         with st.form("add_course_form", clear_on_submit=True):
@@ -118,6 +130,140 @@ def render_course_controls() -> None:
                     add_course(name, color, difficulty)
                     st.success(f"Created course: {name}")
                     st.rerun()
+
+
+def render_blocked_time_controls(week_start: date) -> None:
+    st.subheader("⛔ Weekly blocked time")
+    st.caption("Add sleep, class, meals, work, and other unavailable windows.")
+
+    with st.form("add_blocked_form", clear_on_submit=True):
+        day_name = st.selectbox("Day", DAYS)
+        start_hour = st.number_input("Start hour (0-23)", min_value=0, max_value=23, value=22)
+        end_hour = st.number_input("End hour (1-24)", min_value=1, max_value=24, value=24)
+        label = st.text_input("Reason", placeholder="Sleep / Class / Work")
+        submitted = st.form_submit_button("Add blocked time", use_container_width=True)
+        if submitted:
+            if end_hour <= start_hour:
+                st.warning("End hour must be greater than start hour.")
+            else:
+                st.session_state.blocked_times.append(
+                    {
+                        "day": day_name,
+                        "start_hour": int(start_hour),
+                        "end_hour": int(end_hour),
+                        "label": label.strip() or "Blocked",
+                    }
+                )
+                save_state()
+                st.rerun()
+
+    if st.session_state.blocked_times:
+        for idx, block in enumerate(st.session_state.blocked_times):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                st.write(f"**{block['day']}** {block['start_hour']:02d}:00-{block['end_hour']:02d}:00 · {block['label']}")
+            with col2:
+                if st.button("Remove", key=f"remove_block_{idx}"):
+                    st.session_state.blocked_times.pop(idx)
+                    save_state()
+                    st.rerun()
+
+
+def build_schedule(week_start: date) -> Tuple[Dict[Tuple[int, int], str], List[str]]:
+    """Returns (grid_map, diagnostics). grid value is one of free/blocked/study/due."""
+    grid: Dict[Tuple[int, int], str] = {(d, h): "free" for d in range(7) for h in range(24)}
+    labels: Dict[Tuple[int, int], str] = {}
+    diagnostics: List[str] = []
+
+    for block in st.session_state.blocked_times:
+        day_idx = DAYS.index(block["day"])
+        for hour in range(block["start_hour"], block["end_hour"]):
+            if 0 <= hour <= 23:
+                grid[(day_idx, hour)] = "blocked"
+                labels[(day_idx, hour)] = block["label"]
+
+    now = datetime.now()
+    planned_hours = 0
+    unscheduled_hours = 0
+    flattened_tasks = []
+    for course in st.session_state.courses:
+        for task in course.tasks:
+            due_dt = datetime.fromisoformat(task.due_date)
+            days_left = max((due_dt - now).total_seconds() / 86400, 0.1)
+            urgency = (course.difficulty * task.estimated_hours) / days_left
+            flattened_tasks.append((urgency, due_dt, course, task))
+
+    flattened_tasks.sort(key=lambda x: (-x[0], x[1]))
+
+    for _, due_dt, course, task in flattened_tasks:
+        due_day = (due_dt.date() - week_start).days
+        if 0 <= due_day < 7:
+            due_hour = due_dt.hour
+            grid[(due_day, due_hour)] = "due"
+            labels[(due_day, due_hour)] = f"DUE: {task.title}"
+
+        remaining = int(round(task.estimated_hours))
+        if remaining <= 0:
+            continue
+
+        for day in range(7):
+            for hour in range(24):
+                slot_dt = datetime.combine(week_start + timedelta(days=day), time(hour=hour))
+                if slot_dt < now or slot_dt > due_dt:
+                    continue
+                if grid[(day, hour)] == "free":
+                    grid[(day, hour)] = "study"
+                    labels[(day, hour)] = f"{course.name}: {task.title}"
+                    remaining -= 1
+                    planned_hours += 1
+                    if remaining == 0:
+                        break
+            if remaining == 0:
+                break
+
+        if remaining > 0:
+            unscheduled_hours += remaining
+            diagnostics.append(f"Could not schedule {remaining}h for '{task.title}' ({course.name}).")
+
+    diagnostics.insert(0, f"Total planned study hours this week: {planned_hours}")
+    if unscheduled_hours:
+        diagnostics.append(f"Unscheduled task hours due to limited free time: {unscheduled_hours}")
+
+    return grid, labels, diagnostics
+
+
+def render_weekly_schedule() -> None:
+    week_start = get_week_start(date.today())
+    st.subheader(f"🗓️ Weekly plan ({week_start.isoformat()} to {(week_start + timedelta(days=6)).isoformat()})")
+    render_blocked_time_controls(week_start)
+
+    grid, labels, diagnostics = build_schedule(week_start)
+
+    for msg in diagnostics:
+        st.caption(msg)
+
+    html = [
+        "<table style='width:100%; border-collapse:collapse; font-size:0.78rem;'>",
+        "<thead><tr><th style='position:sticky;left:0;background:#111;padding:4px;border:1px solid #333;'>Hour</th>",
+    ]
+    for day in DAYS:
+        html.append(f"<th style='padding:4px;border:1px solid #333;'>{day}</th>")
+    html.append("</tr></thead><tbody>")
+
+    colors = {"free": "#1f2937", "blocked": "#dc2626", "study": "#16a34a", "due": "#eab308"}
+    for hour in range(24):
+        html.append(f"<tr><td style='padding:4px;border:1px solid #333;background:#111;'>{hour:02d}:00</td>")
+        for day_idx in range(7):
+            state = grid[(day_idx, hour)]
+            label = labels.get((day_idx, hour), "")
+            html.append(
+                f"<td title='{label}' style='padding:4px;border:1px solid #333;background:{colors[state]}; min-width:70px; height:28px;'></td>"
+            )
+        html.append("</tr>")
+    html.append("</tbody></table>")
+
+    st.markdown("**Legend:** 🟥 Blocked  🟨 Due  🟩 Study")
+    st.markdown("".join(html), unsafe_allow_html=True)
 
 
 def render_board() -> None:
@@ -183,16 +329,14 @@ def render_board() -> None:
                     key=f"estimated_hours_{idx}",
                 )
                 due_date = st.datetime_input("Due Date", step=300)
-                add_task_submitted = st.form_submit_button(
-                    "Add Task", use_container_width=True
-                )
+                add_task_submitted = st.form_submit_button("Add Task", use_container_width=True)
 
                 if add_task_submitted:
                     if not task_title.strip():
                         st.warning("Task title cannot be empty.")
                     else:
                         course.add_task(task_title, due_date.isoformat(), task_category, float(estimated_hours))
-                        save_courses()
+                        save_state()
                         st.rerun()
 
             st.markdown("#### Tasks")
@@ -217,11 +361,7 @@ def render_board() -> None:
                         unsafe_allow_html=True,
                     )
 
-                    if st.button(
-                        "Remove Task",
-                        key=f"remove_task_btn_{idx}_{task_idx}",
-                        use_container_width=True,
-                    ):
+                    if st.button("Remove Task", key=f"remove_task_btn_{idx}_{task_idx}", use_container_width=True):
                         st.session_state.pending_task_delete = (idx, task_idx)
 
                     if st.session_state.pending_task_delete == (idx, task_idx):
@@ -234,15 +374,11 @@ def render_board() -> None:
                                 use_container_width=True,
                             ):
                                 course.remove_task(task_idx)
-                                save_courses()
+                                save_state()
                                 st.session_state.pending_task_delete = None
                                 st.rerun()
                         with cancel_col:
-                            if st.button(
-                                "Cancel",
-                                key=f"cancel_remove_task_{idx}_{task_idx}",
-                                use_container_width=True,
-                            ):
+                            if st.button("Cancel", key=f"cancel_remove_task_{idx}_{task_idx}", use_container_width=True):
                                 st.session_state.pending_task_delete = None
                                 st.rerun()
 
@@ -251,6 +387,8 @@ def main() -> None:
     st.set_page_config(page_title="Smart Scheduler", layout="wide")
     init_state()
     render_course_controls()
+    render_weekly_schedule()
+    st.divider()
     render_board()
 
 
