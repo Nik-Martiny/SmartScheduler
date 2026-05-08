@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import List
 
 import streamlit as st
+
+STORAGE_PATH = Path(__file__).with_name("scheduler_state.json")
 
 
 @dataclass
@@ -33,10 +37,39 @@ class Course:
         if 0 <= task_idx < len(self.tasks):
             self.tasks.pop(task_idx)
 
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(raw_course: dict) -> "Course":
+        tasks = [Task(**raw_task) for raw_task in raw_course.get("tasks", [])]
+        return Course(
+            name=raw_course["name"],
+            color=raw_course["color"],
+            difficulty=int(raw_course["difficulty"]),
+            tasks=tasks,
+        )
+
+
+def load_courses() -> List[Course]:
+    if not STORAGE_PATH.exists():
+        return []
+
+    try:
+        raw_state = json.loads(STORAGE_PATH.read_text(encoding="utf-8"))
+        return [Course.from_dict(course) for course in raw_state.get("courses", [])]
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return []
+
+
+def save_courses() -> None:
+    payload = {"courses": [course.to_dict() for course in st.session_state.courses]}
+    STORAGE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
 
 def init_state() -> None:
     if "courses" not in st.session_state:
-        st.session_state.courses: List[Course] = []
+        st.session_state.courses = load_courses()
     if "pending_course_delete" not in st.session_state:
         st.session_state.pending_course_delete = None
     if "pending_task_delete" not in st.session_state:
@@ -47,11 +80,13 @@ def add_course(name: str, color: str, difficulty: int) -> None:
     st.session_state.courses.append(
         Course(name=name.strip(), color=color, difficulty=difficulty)
     )
+    save_courses()
 
 
 def remove_course(course_idx: int) -> None:
     if 0 <= course_idx < len(st.session_state.courses):
         st.session_state.courses.pop(course_idx)
+        save_courses()
 
 
 def render_course_controls() -> None:
@@ -145,6 +180,7 @@ def render_board() -> None:
                         st.warning("Task title cannot be empty.")
                     else:
                         course.add_task(task_title, task_category, float(estimated_hours))
+                        save_courses()
                         st.rerun()
 
             st.markdown("#### Tasks")
@@ -185,6 +221,7 @@ def render_board() -> None:
                                 use_container_width=True,
                             ):
                                 course.remove_task(task_idx)
+                                save_courses()
                                 st.session_state.pending_task_delete = None
                                 st.rerun()
                         with cancel_col:
