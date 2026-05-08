@@ -103,6 +103,27 @@ def add_course(name: str, color: str, difficulty: int) -> None:
     save_state()
 
 
+def update_course(course_idx: int, name: str, color: str, difficulty: int) -> None:
+    if 0 <= course_idx < len(st.session_state.courses):
+        course = st.session_state.courses[course_idx]
+        course.name = name.strip()
+        course.color = color
+        course.difficulty = difficulty
+        save_state()
+
+
+def update_task(course_idx: int, task_idx: int, title: str, due_date: datetime, category: str, estimated_hours: float) -> None:
+    if 0 <= course_idx < len(st.session_state.courses):
+        course = st.session_state.courses[course_idx]
+        if 0 <= task_idx < len(course.tasks):
+            task = course.tasks[task_idx]
+            task.title = title.strip()
+            task.due_date = due_date.isoformat()
+            task.category = category
+            task.estimated_hours = float(estimated_hours)
+            save_state()
+
+
 def remove_course(course_idx: int) -> None:
     if 0 <= course_idx < len(st.session_state.courses):
         st.session_state.courses.pop(course_idx)
@@ -159,15 +180,7 @@ def render_blocked_time_controls(week_start: date) -> None:
                 st.rerun()
 
     if st.session_state.blocked_times:
-        for idx, block in enumerate(st.session_state.blocked_times):
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                st.write(f"**{block['day']}** {block['start_hour']:02d}:00-{block['end_hour']:02d}:00 · {block['label']}")
-            with col2:
-                if st.button("Remove", key=f"remove_block_{idx}"):
-                    st.session_state.blocked_times.pop(idx)
-                    save_state()
-                    st.rerun()
+        st.caption(f"Saved blocked-time entries: {len(st.session_state.blocked_times)}")
 
 
 def build_schedule(week_start: date) -> tuple[dict[tuple[int, int], str], dict[tuple[int, int], str], list[str]]:
@@ -258,7 +271,7 @@ def render_weekly_schedule() -> None:
         if not selected_slots:
             st.info("Select one or more slots from the interactive grid first.")
         else:
-            action = st.selectbox("Action", ["Blocked Time", "Assignment", "Study Time"])
+            action = st.selectbox("Action", ["Blocked Time", "Assignment", "Study Time", "Free Time"])
             if action == "Blocked Time":
                 block_label = st.text_input("Reason", value="Blocked")
                 if st.button("Apply blocked time", use_container_width=True):
@@ -288,7 +301,7 @@ def render_weekly_schedule() -> None:
                             save_state()
                             st.success("Assignment created.")
                             st.rerun()
-            else:
+            elif action == "Study Time":
                 if not st.session_state.courses:
                     st.warning("Create a course and task first.")
                 else:
@@ -305,6 +318,19 @@ def render_weekly_schedule() -> None:
                             save_state()
                             st.success("Task study hours updated.")
                             st.rerun()
+            else:
+                if st.button("Clear selected blocked slots", use_container_width=True):
+                    selected_set = {(day_idx, hour) for day_idx, hour in selected_slots}
+                    filtered_blocks = []
+                    for block in st.session_state.blocked_times:
+                        day_idx = DAYS.index(block["day"])
+                        if (day_idx, block["start_hour"]) not in selected_set:
+                            filtered_blocks.append(block)
+                    removed_count = len(st.session_state.blocked_times) - len(filtered_blocks)
+                    st.session_state.blocked_times = filtered_blocks
+                    save_state()
+                    st.success(f"Cleared {removed_count} blocked slot(s).")
+                    st.rerun()
 
 
 def render_board() -> None:
@@ -338,6 +364,21 @@ def render_board() -> None:
 
             if st.button("🗑️ Remove Course", key=f"remove_course_btn_{idx}", use_container_width=True):
                 st.session_state.pending_course_delete = idx
+
+            with st.popover("✏️ Edit Course", use_container_width=True):
+                with st.form(f"edit_course_form_{idx}"):
+                    edit_name = st.text_input("Course Name", value=course.name, key=f"edit_course_name_{idx}")
+                    edit_color = st.color_picker("Course Color", value=course.color, key=f"edit_course_color_{idx}")
+                    edit_difficulty = st.slider(
+                        "Estimated Difficulty", min_value=1, max_value=10, value=course.difficulty, key=f"edit_course_diff_{idx}"
+                    )
+                    if st.form_submit_button("Save Course", use_container_width=True):
+                        if not edit_name.strip():
+                            st.warning("Course name cannot be empty.")
+                        else:
+                            update_course(idx, edit_name, edit_color, edit_difficulty)
+                            st.success("Course updated.")
+                            st.rerun()
 
             if st.session_state.pending_course_delete == idx:
                 st.warning(
@@ -404,6 +445,46 @@ def render_board() -> None:
 
                     if st.button("Remove Task", key=f"remove_task_btn_{idx}_{task_idx}", use_container_width=True):
                         st.session_state.pending_task_delete = (idx, task_idx)
+
+                    with st.popover("✏️ Edit Task", use_container_width=True):
+                        with st.form(f"edit_task_form_{idx}_{task_idx}"):
+                            edit_task_title = st.text_input("Task", value=task.title, key=f"edit_task_title_{idx}_{task_idx}")
+                            edit_task_category = st.selectbox(
+                                "Category",
+                                options=["Assignment", "Quiz", "Exam"],
+                                index=["Assignment", "Quiz", "Exam"].index(task.category)
+                                if task.category in ["Assignment", "Quiz", "Exam"]
+                                else 0,
+                                key=f"edit_task_category_{idx}_{task_idx}",
+                            )
+                            edit_estimated_hours = st.number_input(
+                                "Estimated Hours",
+                                min_value=0.5,
+                                max_value=100.0,
+                                value=float(task.estimated_hours),
+                                step=0.5,
+                                key=f"edit_estimated_hours_{idx}_{task_idx}",
+                            )
+                            edit_due_date = st.datetime_input(
+                                "Due Date",
+                                value=datetime.fromisoformat(task.due_date),
+                                step=300,
+                                key=f"edit_due_date_{idx}_{task_idx}",
+                            )
+                            if st.form_submit_button("Save Task", use_container_width=True):
+                                if not edit_task_title.strip():
+                                    st.warning("Task title cannot be empty.")
+                                else:
+                                    update_task(
+                                        idx,
+                                        task_idx,
+                                        edit_task_title,
+                                        edit_due_date,
+                                        edit_task_category,
+                                        float(edit_estimated_hours),
+                                    )
+                                    st.success("Task updated.")
+                                    st.rerun()
 
                     if st.session_state.pending_task_delete == (idx, task_idx):
                         st.warning(f"Remove task '{task.title}' from '{course.name}'?")
