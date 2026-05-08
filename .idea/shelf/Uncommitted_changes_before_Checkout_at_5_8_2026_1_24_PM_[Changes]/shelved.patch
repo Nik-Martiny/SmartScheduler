@@ -1,0 +1,197 @@
+Index: main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from __future__ import annotations\r\n\r\nfrom dataclasses import dataclass, field\r\nfrom typing import List\r\n\r\nimport streamlit as st\r\n\r\n\r\n@dataclass\r\nclass Task:\r\n    \"\"\"A child task that belongs to one Course.\"\"\"\r\n\r\n    title: str\r\n    details: str = \"\"\r\n\r\n\r\n@dataclass\r\nclass Course:\r\n    \"\"\"Parent object that owns a list of child Task objects.\"\"\"\r\n\r\n    name: str\r\n    color: str\r\n    difficulty: int\r\n    tasks: List[Task] = field(default_factory=list)\r\n\r\n    def add_task(self, title: str, details: str = \"\") -> None:\r\n        self.tasks.append(Task(title=title, details=details))\r\n\r\n    def remove_task(self, task_idx: int) -> None:\r\n        if 0 <= task_idx < len(self.tasks):\r\n            self.tasks.pop(task_idx)\r\n\r\n\r\ndef init_state() -> None:\r\n    if \"courses\" not in st.session_state:\r\n        st.session_state.courses: List[Course] = []\r\n    if \"pending_course_delete\" not in st.session_state:\r\n        st.session_state.pending_course_delete = None\r\n    if \"pending_task_delete\" not in st.session_state:\r\n        st.session_state.pending_task_delete = None\r\n\r\n\r\ndef add_course(name: str, color: str, difficulty: int) -> None:\r\n    st.session_state.courses.append(\r\n        Course(name=name.strip(), color=color, difficulty=difficulty)\r\n    )\r\n\r\n\r\ndef remove_course(course_idx: int) -> None:\r\n    if 0 <= course_idx < len(st.session_state.courses):\r\n        st.session_state.courses.pop(course_idx)\r\n\r\n\r\ndef render_course_controls() -> None:\r\n    st.title(\"\uD83D\uDCDA Smart Scheduler\")\r\n    st.caption(\"Kanban-style course planning board\")\r\n\r\n    with st.popover(\"➕ Add Course\", use_container_width=False):\r\n        with st.form(\"add_course_form\", clear_on_submit=True):\r\n            name = st.text_input(\"Course Name\", placeholder=\"e.g., Algorithms\")\r\n            color = st.color_picker(\"Course Color\", value=\"#4F46E5\")\r\n            difficulty = st.slider(\"Estimated Difficulty\", min_value=1, max_value=10, value=5)\r\n            submitted = st.form_submit_button(\"Create Course\", use_container_width=True)\r\n\r\n            if submitted:\r\n                if not name.strip():\r\n                    st.warning(\"Please enter a course name.\")\r\n                else:\r\n                    add_course(name, color, difficulty)\r\n                    st.success(f\"Created course: {name}\")\r\n                    st.rerun()\r\n\r\n\r\ndef render_board() -> None:\r\n    courses: List[Course] = st.session_state.courses\r\n\r\n    if not courses:\r\n        st.info(\"No courses yet. Use **Add Course** to create your first column.\")\r\n        return\r\n\r\n    columns = st.columns(len(courses), gap=\"medium\")\r\n\r\n    for idx, course in enumerate(courses):\r\n        with columns[idx]:\r\n            st.markdown(\r\n                f\"\"\"\r\n                <div style=\"\r\n                    border-left: 8px solid {course.color};\r\n                    background: rgba(255,255,255,0.04);\r\n                    border-radius: 14px;\r\n                    padding: 0.85rem 1rem;\r\n                    margin-bottom: 0.75rem;\r\n                \">\r\n                    <h4 style=\"margin:0;\">{course.name}</h4>\r\n                    <p style=\"margin: 0.25rem 0 0 0; opacity: 0.8;\">\r\n                        Difficulty: {course.difficulty}/10\r\n                    </p>\r\n                </div>\r\n                \"\"\",\r\n                unsafe_allow_html=True,\r\n            )\r\n\r\n            if st.button(\"\uD83D\uDDD1\uFE0F Remove Course\", key=f\"remove_course_btn_{idx}\", use_container_width=True):\r\n                st.session_state.pending_course_delete = idx\r\n\r\n            if st.session_state.pending_course_delete == idx:\r\n                st.warning(\r\n                    f\"Are you sure you want to remove '{course.name}'? This deletes all tasks in this course.\"\r\n                )\r\n                confirm_col, cancel_col = st.columns(2)\r\n                with confirm_col:\r\n                    if st.button(\"Confirm Course Removal\", key=f\"confirm_remove_course_{idx}\", use_container_width=True):\r\n                        remove_course(idx)\r\n                        st.session_state.pending_course_delete = None\r\n                        st.rerun()\r\n                with cancel_col:\r\n                    if st.button(\"Cancel\", key=f\"cancel_remove_course_{idx}\", use_container_width=True):\r\n                        st.session_state.pending_course_delete = None\r\n                        st.rerun()\r\n\r\n            with st.form(f\"add_task_form_{idx}\", clear_on_submit=True):\r\n                task_title = st.text_input(\"Task\", key=f\"task_title_{idx}\")\r\n                task_details = st.text_area(\r\n                    \"Task Details (optional)\",\r\n                    key=f\"task_details_{idx}\",\r\n                    height=80,\r\n                )\r\n                add_task_submitted = st.form_submit_button(\r\n                    \"Add Task\", use_container_width=True\r\n                )\r\n\r\n                if add_task_submitted:\r\n                    if not task_title.strip():\r\n                        st.warning(\"Task title cannot be empty.\")\r\n                    else:\r\n                        course.add_task(task_title, task_details)\r\n                        st.rerun()\r\n\r\n            st.markdown(\"#### Tasks\")\r\n            if not course.tasks:\r\n                st.caption(\"No tasks for this course yet.\")\r\n            else:\r\n                for task_idx, task in enumerate(course.tasks):\r\n                    st.markdown(\r\n                        f\"\"\"\r\n                        <div style=\"\r\n                            border: 1px solid rgba(255,255,255,0.12);\r\n                            border-radius: 10px;\r\n                            padding: 0.7rem;\r\n                            margin-bottom: 0.55rem;\r\n                        \">\r\n                            <strong>{task.title}</strong>\r\n                            <p style=\"margin: 0.3rem 0 0 0; opacity: 0.8;\">{task.details}</p>\r\n                        </div>\r\n                        \"\"\",\r\n                        unsafe_allow_html=True,\r\n                    )\r\n\r\n                    if st.button(\r\n                        \"Remove Task\",\r\n                        key=f\"remove_task_btn_{idx}_{task_idx}\",\r\n                        use_container_width=True,\r\n                    ):\r\n                        st.session_state.pending_task_delete = (idx, task_idx)\r\n\r\n                    if st.session_state.pending_task_delete == (idx, task_idx):\r\n                        st.warning(f\"Remove task '{task.title}' from '{course.name}'?\")\r\n                        confirm_col, cancel_col = st.columns(2)\r\n                        with confirm_col:\r\n                            if st.button(\r\n                                \"Confirm Task Removal\",\r\n                                key=f\"confirm_remove_task_{idx}_{task_idx}\",\r\n                                use_container_width=True,\r\n                            ):\r\n                                course.remove_task(task_idx)\r\n                                st.session_state.pending_task_delete = None\r\n                                st.rerun()\r\n                        with cancel_col:\r\n                            if st.button(\r\n                                \"Cancel\",\r\n                                key=f\"cancel_remove_task_{idx}_{task_idx}\",\r\n                                use_container_width=True,\r\n                            ):\r\n                                st.session_state.pending_task_delete = None\r\n                                st.rerun()\r\n\r\n\r\ndef main() -> None:\r\n    st.set_page_config(page_title=\"Smart Scheduler\", layout=\"wide\")\r\n    init_state()\r\n    render_course_controls()\r\n    render_board()\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    main()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/main.py b/main.py
+--- a/main.py	(revision 402c532dde5388ac28f2fa25cd0824cc9a24e3c0)
++++ b/main.py	(date 1778260832240)
+@@ -1,18 +1,33 @@
+ from __future__ import annotations
+ 
++from enum import Enum
+ from dataclasses import dataclass, field
+-from typing import List
++from typing import List, Literal
+ 
+ import streamlit as st
+ 
+ 
++class TaskCategory(Enum):
++    ASSIGNMENT = 1
++    QUIZ = 2
++    EXAM = 3
++    @staticmethod
++    def str_to_category(string: str):
++        if string.casefold() == "ASSIGNMENT".casefold():
++            return TaskCategory.ASSIGNMENT
++        elif string.casefold() == "QUIZ".casefold():
++            return TaskCategory.QUIZ
++        elif string.casefold() == "EXAM".casefold():
++            return TaskCategory.EXAM
++        return None
++
+ @dataclass
+ class Task:
+     """A child task that belongs to one Course."""
+ 
+     title: str
+-    details: str = ""
+-
++    category: Literal[TaskCategory.ASSIGNMENT, TaskCategory.QUIZ, TaskCategory.EXAM] | None
++    estimated_hours: float
+ 
+ @dataclass
+ class Course:
+@@ -23,8 +38,8 @@
+     difficulty: int
+     tasks: List[Task] = field(default_factory=list)
+ 
+-    def add_task(self, title: str, details: str = "") -> None:
+-        self.tasks.append(Task(title=title, details=details))
++    def add_task(self, title: str, category: Literal[TaskCategory.ASSIGNMENT, TaskCategory.QUIZ, TaskCategory.EXAM] | None, hours: float) -> None:
++        self.tasks.append(Task(title=title, category=category, estimated_hours=hours))
+ 
+     def remove_task(self, task_idx: int) -> None:
+         if 0 <= task_idx < len(self.tasks):
+@@ -119,12 +134,10 @@
+                         st.rerun()
+ 
+             with st.form(f"add_task_form_{idx}", clear_on_submit=True):
++                task_category = TaskCategory.str_to_category(st.selectbox("Category", ("Assignment", "Exam", "Quiz"), index=0, placeholder="Select Task Category", key=f"task_category_{idx}"))
+                 task_title = st.text_input("Task", key=f"task_title_{idx}")
+-                task_details = st.text_area(
+-                    "Task Details (optional)",
+-                    key=f"task_details_{idx}",
+-                    height=80,
+-                )
++                task_hours = st.number_input("Estimated Hours", min_value=0.0, max_value=60.0, value=8.0, step=0.1, key=f"task_hours_{idx}")
++
+                 add_task_submitted = st.form_submit_button(
+                     "Add Task", use_container_width=True
+                 )
+@@ -133,7 +146,7 @@
+                     if not task_title.strip():
+                         st.warning("Task title cannot be empty.")
+                     else:
+-                        course.add_task(task_title, task_details)
++                        course.add_task(task_title, task_category, task_hours)
+                         st.rerun()
+ 
+             st.markdown("#### Tasks")
+@@ -150,7 +163,7 @@
+                             margin-bottom: 0.55rem;
+                         ">
+                             <strong>{task.title}</strong>
+-                            <p style="margin: 0.3rem 0 0 0; opacity: 0.8;">{task.details}</p>
++                            <p style="margin: 0.3rem 0 0 0; opacity: 0.8;">{task}</p>
+                         </div>
+                         """,
+                         unsafe_allow_html=True,
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"ChangeListManager\">\r\n    <list default=\"true\" id=\"b2f6c472-0d1a-4ca8-af22-dc5a81c018d0\" name=\"Changes\" comment=\"\">\r\n      <change afterPath=\"$PROJECT_DIR$/.gitignore\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/SmartScheduler.iml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/modules.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/vcs.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/main.py\" afterDir=\"false\" />\r\n    </list>\r\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\r\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\r\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\r\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\r\n  </component>\r\n  <component name=\"FileTemplateManagerImpl\">\r\n    <option name=\"RECENT_TEMPLATES\">\r\n      <list>\r\n        <option value=\"Python Script\" />\r\n      </list>\r\n    </option>\r\n  </component>\r\n  <component name=\"Git.Settings\">\r\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\r\n  </component>\r\n  <component name=\"ProjectColorInfo\"><![CDATA[{\r\n  \"associatedIndex\": 5\r\n}]]></component>\r\n  <component name=\"ProjectId\" id=\"3DQNCVX22bo5OKxXtg9vCG2shzk\" />\r\n  <component name=\"ProjectViewState\">\r\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\r\n    <option name=\"showLibraryContents\" value=\"true\" />\r\n  </component>\r\n  <component name=\"PropertiesComponent\"><![CDATA[{\r\n  \"keyToString\": {\r\n    \"ModuleVcsDetector.initialDetectionPerformed\": \"true\",\r\n    \"Python.main.executor\": \"Debug\",\r\n    \"RunOnceActivity.ShowReadmeOnStart\": \"true\",\r\n    \"RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252\": \"true\",\r\n    \"RunOnceActivity.git.unshallow\": \"true\",\r\n    \"git-widget-placeholder\": \"master\"\r\n  }\r\n}]]></component>\r\n  <component name=\"RunManager\">\r\n    <configuration name=\"main\" type=\"PythonConfigurationType\" factoryName=\"Python\">\r\n      <module name=\"SmartScheduler\" />\r\n      <option name=\"ENV_FILES\" value=\"\" />\r\n      <option name=\"INTERPRETER_OPTIONS\" value=\"\" />\r\n      <option name=\"PARENT_ENVS\" value=\"true\" />\r\n      <envs>\r\n        <env name=\"PYTHONUNBUFFERED\" value=\"1\" />\r\n      </envs>\r\n      <option name=\"SDK_HOME\" value=\"\" />\r\n      <option name=\"SDK_NAME\" value=\"Python 3.14 (SmartScheduler)\" />\r\n      <option name=\"WORKING_DIRECTORY\" value=\"$FileDir$\" />\r\n      <option name=\"IS_MODULE_SDK\" value=\"false\" />\r\n      <option name=\"ADD_CONTENT_ROOTS\" value=\"true\" />\r\n      <option name=\"ADD_SOURCE_ROOTS\" value=\"true\" />\r\n      <option name=\"RUN_TOOL\" value=\"\" />\r\n      <option name=\"SCRIPT_NAME\" value=\"main.py\" />\r\n      <option name=\"PARAMETERS\" value=\"\" />\r\n      <option name=\"SHOW_COMMAND_LINE\" value=\"false\" />\r\n      <option name=\"EMULATE_TERMINAL\" value=\"false\" />\r\n      <option name=\"MODULE_MODE\" value=\"false\" />\r\n      <option name=\"REDIRECT_INPUT\" value=\"false\" />\r\n      <option name=\"INPUT_FILE\" value=\"\" />\r\n      <method v=\"2\" />\r\n    </configuration>\r\n  </component>\r\n  <component name=\"SharedIndexes\">\r\n    <attachedChunks>\r\n      <set>\r\n        <option value=\"bundled-python-sdk-ca5e2b39c7df-6e1f45a539f7-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.29346.308\" />\r\n      </set>\r\n    </attachedChunks>\r\n  </component>\r\n  <component name=\"TaskManager\">\r\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\r\n      <changelist id=\"b2f6c472-0d1a-4ca8-af22-dc5a81c018d0\" name=\"Changes\" comment=\"\" />\r\n      <created>1778210206470</created>\r\n      <option name=\"number\" value=\"Default\" />\r\n      <option name=\"presentableId\" value=\"Default\" />\r\n      <updated>1778210206470</updated>\r\n    </task>\r\n    <servers />\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 402c532dde5388ac28f2fa25cd0824cc9a24e3c0)
++++ b/.idea/workspace.xml	(date 1778258232010)
+@@ -1,14 +1,9 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+   <component name="ChangeListManager">
+-    <list default="true" id="b2f6c472-0d1a-4ca8-af22-dc5a81c018d0" name="Changes" comment="">
+-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/SmartScheduler.iml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
++    <list default="true" id="b2f6c472-0d1a-4ca8-af22-dc5a81c018d0" name="Changes" comment="initial commit">
++      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+     </list>
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+@@ -23,26 +18,43 @@
+     </option>
+   </component>
+   <component name="Git.Settings">
++    <option name="RECENT_BRANCH_BY_REPOSITORY">
++      <map>
++        <entry key="$PROJECT_DIR$" value="codex/create-modern-ui-for-course-management" />
++      </map>
++    </option>
+     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+   </component>
+-  <component name="ProjectColorInfo"><![CDATA[{
+-  "associatedIndex": 5
+-}]]></component>
++  <component name="GitHubPullRequestSearchHistory">{
++  &quot;lastFilter&quot;: {
++    &quot;state&quot;: &quot;OPEN&quot;,
++    &quot;assignee&quot;: &quot;Nik-Martiny&quot;
++  }
++}</component>
++  <component name="GithubPullRequestsUISettings">{
++  &quot;selectedUrlAndAccountId&quot;: {
++    &quot;url&quot;: &quot;https://github.com/Nik-Martiny/SmartScheduler.git&quot;,
++    &quot;accountId&quot;: &quot;db1cc4f8-62ce-46d0-82f9-3815463f27ff&quot;
++  }
++}</component>
++  <component name="ProjectColorInfo">{
++  &quot;associatedIndex&quot;: 5
++}</component>
+   <component name="ProjectId" id="3DQNCVX22bo5OKxXtg9vCG2shzk" />
+   <component name="ProjectViewState">
+     <option name="hideEmptyMiddlePackages" value="true" />
+     <option name="showLibraryContents" value="true" />
+   </component>
+-  <component name="PropertiesComponent"><![CDATA[{
+-  "keyToString": {
+-    "ModuleVcsDetector.initialDetectionPerformed": "true",
+-    "Python.main.executor": "Debug",
+-    "RunOnceActivity.ShowReadmeOnStart": "true",
+-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+-    "RunOnceActivity.git.unshallow": "true",
+-    "git-widget-placeholder": "master"
++  <component name="PropertiesComponent">{
++  &quot;keyToString&quot;: {
++    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
++    &quot;Python.main.executor&quot;: &quot;Debug&quot;,
++    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
++    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
++    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
++    &quot;git-widget-placeholder&quot;: &quot;#1 on codex/create-modern-ui-for-course-management&quot;
+   }
+-}]]></component>
++}</component>
+   <component name="RunManager">
+     <configuration name="main" type="PythonConfigurationType" factoryName="Python">
+       <module name="SmartScheduler" />
+@@ -84,6 +96,19 @@
+       <option name="presentableId" value="Default" />
+       <updated>1778210206470</updated>
+     </task>
++    <task id="LOCAL-00001" summary="initial commit">
++      <option name="closed" value="true" />
++      <created>1778257045245</created>
++      <option name="number" value="00001" />
++      <option name="presentableId" value="LOCAL-00001" />
++      <option name="project" value="LOCAL" />
++      <updated>1778257045245</updated>
++    </task>
++    <option name="localTasksCounter" value="2" />
+     <servers />
+   </component>
++  <component name="VcsManagerConfiguration">
++    <MESSAGE value="initial commit" />
++    <option name="LAST_COMMIT_MESSAGE" value="initial commit" />
++  </component>
+ </project>
+\ No newline at end of file

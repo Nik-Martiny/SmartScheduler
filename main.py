@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -15,8 +16,18 @@ class Task:
     """A child task that belongs to one Course."""
 
     title: str
+    due_date: str
     category: str
     estimated_hours: float
+
+    @staticmethod
+    def from_dict(raw_task: dict) -> "Task":
+        return Task(
+            title=raw_task["title"],
+            due_date=raw_task["due_date"],
+            category=raw_task["category"],
+            estimated_hours=float(raw_task["estimated_hours"]),
+        )
 
 
 @dataclass
@@ -28,9 +39,9 @@ class Course:
     difficulty: int
     tasks: List[Task] = field(default_factory=list)
 
-    def add_task(self, title: str, category: str, estimated_hours: float) -> None:
+    def add_task(self, title: str, due_date: str, category: str, estimated_hours: float) -> None:
         self.tasks.append(
-            Task(title=title, category=category, estimated_hours=estimated_hours)
+            Task(title=title, due_date=due_date, category=category, estimated_hours=estimated_hours)
         )
 
     def remove_task(self, task_idx: int) -> None:
@@ -42,7 +53,7 @@ class Course:
 
     @staticmethod
     def from_dict(raw_course: dict) -> "Course":
-        tasks = [Task(**raw_task) for raw_task in raw_course.get("tasks", [])]
+        tasks = [task.from_dict() for task in raw_course.get("tasks", [])]
         return Course(
             name=raw_course["name"],
             color=raw_course["color"],
@@ -171,6 +182,7 @@ def render_board() -> None:
                     step=0.5,
                     key=f"estimated_hours_{idx}",
                 )
+                due_date = st.datetime_input("Due Date", step=300)
                 add_task_submitted = st.form_submit_button(
                     "Add Task", use_container_width=True
                 )
@@ -179,7 +191,7 @@ def render_board() -> None:
                     if not task_title.strip():
                         st.warning("Task title cannot be empty.")
                     else:
-                        course.add_task(task_title, task_category, float(estimated_hours))
+                        course.add_task(task_title, due_date.isoformat(), task_category, float(estimated_hours))
                         save_courses()
                         st.rerun()
 
@@ -197,6 +209,7 @@ def render_board() -> None:
                             margin-bottom: 0.55rem;
                         ">
                             <strong>{task.title}</strong>
+                            <p style="margin: 0.075rem 0 0 0; opacity: 1;">Due Date: {task.due_date}</p>
                             <p style="margin: 0.3rem 0 0 0; opacity: 0.85;">Category: {task.category}</p>
                             <p style="margin: 0.15rem 0 0 0; opacity: 0.75;">Estimated Hours: {task.estimated_hours:g}</p>
                         </div>

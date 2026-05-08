@@ -1,0 +1,102 @@
+Index: main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from __future__ import annotations\r\n\r\nfrom dataclasses import dataclass, field\r\nfrom typing import List\r\n\r\nimport streamlit as st\r\n\r\n\r\n@dataclass\r\nclass Task:\r\n    \"\"\"A child task that belongs to one Course.\"\"\"\r\n\r\n    title: str\r\n    details: str = \"\"\r\n\r\n\r\n@dataclass\r\nclass Course:\r\n    \"\"\"Parent object that owns a list of child Task objects.\"\"\"\r\n\r\n    name: str\r\n    color: str\r\n    difficulty: int\r\n    tasks: List[Task] = field(default_factory=list)\r\n\r\n    def add_task(self, title: str, details: str = \"\") -> None:\r\n        self.tasks.append(Task(title=title, details=details))\r\n\r\n\r\ndef init_state() -> None:\r\n    if \"courses\" not in st.session_state:\r\n        st.session_state.courses: List[Course] = []\r\n\r\n\r\ndef add_course(name: str, color: str, difficulty: int) -> None:\r\n    st.session_state.courses.append(\r\n        Course(name=name.strip(), color=color, difficulty=difficulty)\r\n    )\r\n\r\n\r\ndef render_course_controls() -> None:\r\n    st.title(\"\uD83D\uDCDA Smart Scheduler\")\r\n    st.caption(\"Kanban-style course planning board\")\r\n\r\n    with st.popover(\"➕ Add Course\", use_container_width=False):\r\n        with st.form(\"add_course_form\", clear_on_submit=True):\r\n            name = st.text_input(\"Course Name\", placeholder=\"e.g., Algorithms\")\r\n            color = st.color_picker(\"Course Color\", value=\"#4F46E5\")\r\n            difficulty = st.slider(\"Estimated Difficulty\", min_value=1, max_value=10, value=5)\r\n            submitted = st.form_submit_button(\"Create Course\", use_container_width=True)\r\n\r\n            if submitted:\r\n                if not name.strip():\r\n                    st.warning(\"Please enter a course name.\")\r\n                else:\r\n                    add_course(name, color, difficulty)\r\n                    st.success(f\"Created course: {name}\")\r\n                    st.rerun()\r\n\r\n\r\ndef render_board() -> None:\r\n    courses: List[Course] = st.session_state.courses\r\n\r\n    if not courses:\r\n        st.info(\"No courses yet. Use **Add Course** to create your first column.\")\r\n        return\r\n\r\n    columns = st.columns(len(courses), gap=\"medium\")\r\n\r\n    for idx, course in enumerate(courses):\r\n        with columns[idx]:\r\n            st.markdown(\r\n                f\"\"\"\r\n                <div style=\"\r\n                    border-left: 8px solid {course.color};\r\n                    background: rgba(255,255,255,0.04);\r\n                    border-radius: 14px;\r\n                    padding: 0.85rem 1rem;\r\n                    margin-bottom: 0.75rem;\r\n                \">\r\n                    <h4 style=\"margin:0;\">{course.name}</h4>\r\n                    <p style=\"margin: 0.25rem 0 0 0; opacity: 0.8;\">\r\n                        Difficulty: {course.difficulty}/10\r\n                    </p>\r\n                </div>\r\n                \"\"\",\r\n                unsafe_allow_html=True,\r\n            )\r\n\r\n            with st.form(f\"add_task_form_{idx}\", clear_on_submit=True):\r\n                task_title = st.text_input(\"Task\", key=f\"task_title_{idx}\")\r\n                task_details = st.text_area(\r\n                    \"Task Details (optional)\",\r\n                    key=f\"task_details_{idx}\",\r\n                    height=80,\r\n                )\r\n                add_task_submitted = st.form_submit_button(\r\n                    \"Add Task\", use_container_width=True\r\n                )\r\n\r\n                if add_task_submitted:\r\n                    if not task_title.strip():\r\n                        st.warning(\"Task title cannot be empty.\")\r\n                    else:\r\n                        course.add_task(task_title, task_details)\r\n                        st.rerun()\r\n\r\n            st.markdown(\"#### Tasks\")\r\n            if not course.tasks:\r\n                st.caption(\"No tasks for this course yet.\")\r\n            else:\r\n                for task in course.tasks:\r\n                    st.markdown(\r\n                        f\"\"\"\r\n                        <div style=\"\r\n                            border: 1px solid rgba(255,255,255,0.12);\r\n                            border-radius: 10px;\r\n                            padding: 0.7rem;\r\n                            margin-bottom: 0.55rem;\r\n                        \">\r\n                            <strong>{task.title}</strong>\r\n                            <p style=\"margin: 0.3rem 0 0 0; opacity: 0.8;\">{task.details}</p>\r\n                        </div>\r\n                        \"\"\",\r\n                        unsafe_allow_html=True,\r\n                    )\r\n\r\n\r\ndef main() -> None:\r\n    st.set_page_config(page_title=\"Smart Scheduler\", layout=\"wide\")\r\n    init_state()\r\n    render_course_controls()\r\n    render_board()\r\n\r\n\r\nif __name__ == \"__main__\":\r\n    main()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/main.py b/main.py
+--- a/main.py	(revision 0f3a8332e6e615d637fee323dac34b3fd73ca036)
++++ b/main.py	(date 1778257893340)
+@@ -13,7 +13,6 @@
+     title: str
+     details: str = ""
+ 
+-
+ @dataclass
+ class Course:
+     """Parent object that owns a list of child Task objects."""
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"ChangeListManager\">\r\n    <list default=\"true\" id=\"b2f6c472-0d1a-4ca8-af22-dc5a81c018d0\" name=\"Changes\" comment=\"\">\r\n      <change afterPath=\"$PROJECT_DIR$/.gitignore\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/SmartScheduler.iml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/modules.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/vcs.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\r\n      <change afterPath=\"$PROJECT_DIR$/main.py\" afterDir=\"false\" />\r\n    </list>\r\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\r\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\r\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\r\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\r\n  </component>\r\n  <component name=\"FileTemplateManagerImpl\">\r\n    <option name=\"RECENT_TEMPLATES\">\r\n      <list>\r\n        <option value=\"Python Script\" />\r\n      </list>\r\n    </option>\r\n  </component>\r\n  <component name=\"Git.Settings\">\r\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\r\n  </component>\r\n  <component name=\"ProjectColorInfo\"><![CDATA[{\r\n  \"associatedIndex\": 5\r\n}]]></component>\r\n  <component name=\"ProjectId\" id=\"3DQNCVX22bo5OKxXtg9vCG2shzk\" />\r\n  <component name=\"ProjectViewState\">\r\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\r\n    <option name=\"showLibraryContents\" value=\"true\" />\r\n  </component>\r\n  <component name=\"PropertiesComponent\"><![CDATA[{\r\n  \"keyToString\": {\r\n    \"ModuleVcsDetector.initialDetectionPerformed\": \"true\",\r\n    \"Python.main.executor\": \"Debug\",\r\n    \"RunOnceActivity.ShowReadmeOnStart\": \"true\",\r\n    \"RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252\": \"true\",\r\n    \"RunOnceActivity.git.unshallow\": \"true\",\r\n    \"git-widget-placeholder\": \"master\"\r\n  }\r\n}]]></component>\r\n  <component name=\"RunManager\">\r\n    <configuration name=\"main\" type=\"PythonConfigurationType\" factoryName=\"Python\">\r\n      <module name=\"SmartScheduler\" />\r\n      <option name=\"ENV_FILES\" value=\"\" />\r\n      <option name=\"INTERPRETER_OPTIONS\" value=\"\" />\r\n      <option name=\"PARENT_ENVS\" value=\"true\" />\r\n      <envs>\r\n        <env name=\"PYTHONUNBUFFERED\" value=\"1\" />\r\n      </envs>\r\n      <option name=\"SDK_HOME\" value=\"\" />\r\n      <option name=\"SDK_NAME\" value=\"Python 3.14 (SmartScheduler)\" />\r\n      <option name=\"WORKING_DIRECTORY\" value=\"$FileDir$\" />\r\n      <option name=\"IS_MODULE_SDK\" value=\"false\" />\r\n      <option name=\"ADD_CONTENT_ROOTS\" value=\"true\" />\r\n      <option name=\"ADD_SOURCE_ROOTS\" value=\"true\" />\r\n      <option name=\"RUN_TOOL\" value=\"\" />\r\n      <option name=\"SCRIPT_NAME\" value=\"main.py\" />\r\n      <option name=\"PARAMETERS\" value=\"\" />\r\n      <option name=\"SHOW_COMMAND_LINE\" value=\"false\" />\r\n      <option name=\"EMULATE_TERMINAL\" value=\"false\" />\r\n      <option name=\"MODULE_MODE\" value=\"false\" />\r\n      <option name=\"REDIRECT_INPUT\" value=\"false\" />\r\n      <option name=\"INPUT_FILE\" value=\"\" />\r\n      <method v=\"2\" />\r\n    </configuration>\r\n  </component>\r\n  <component name=\"SharedIndexes\">\r\n    <attachedChunks>\r\n      <set>\r\n        <option value=\"bundled-python-sdk-ca5e2b39c7df-6e1f45a539f7-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.29346.308\" />\r\n      </set>\r\n    </attachedChunks>\r\n  </component>\r\n  <component name=\"TaskManager\">\r\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\r\n      <changelist id=\"b2f6c472-0d1a-4ca8-af22-dc5a81c018d0\" name=\"Changes\" comment=\"\" />\r\n      <created>1778210206470</created>\r\n      <option name=\"number\" value=\"Default\" />\r\n      <option name=\"presentableId\" value=\"Default\" />\r\n      <updated>1778210206470</updated>\r\n    </task>\r\n    <servers />\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 0f3a8332e6e615d637fee323dac34b3fd73ca036)
++++ b/.idea/workspace.xml	(date 1778257844934)
+@@ -1,14 +1,9 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
+   <component name="ChangeListManager">
+-    <list default="true" id="b2f6c472-0d1a-4ca8-af22-dc5a81c018d0" name="Changes" comment="">
+-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/SmartScheduler.iml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
++    <list default="true" id="b2f6c472-0d1a-4ca8-af22-dc5a81c018d0" name="Changes" comment="initial commit">
++      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+     </list>
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+@@ -23,8 +18,25 @@
+     </option>
+   </component>
+   <component name="Git.Settings">
++    <option name="RECENT_BRANCH_BY_REPOSITORY">
++      <map>
++        <entry key="$PROJECT_DIR$" value="master" />
++      </map>
++    </option>
+     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+   </component>
++  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
++  "lastFilter": {
++    "state": "OPEN",
++    "assignee": "Nik-Martiny"
++  }
++}]]></component>
++  <component name="GithubPullRequestsUISettings"><![CDATA[{
++  "selectedUrlAndAccountId": {
++    "url": "https://github.com/Nik-Martiny/SmartScheduler.git",
++    "accountId": "db1cc4f8-62ce-46d0-82f9-3815463f27ff"
++  }
++}]]></component>
+   <component name="ProjectColorInfo"><![CDATA[{
+   "associatedIndex": 5
+ }]]></component>
+@@ -40,7 +52,7 @@
+     "RunOnceActivity.ShowReadmeOnStart": "true",
+     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+     "RunOnceActivity.git.unshallow": "true",
+-    "git-widget-placeholder": "master"
++    "git-widget-placeholder": "#1 on codex/create-modern-ui-for-course-management"
+   }
+ }]]></component>
+   <component name="RunManager">
+@@ -84,6 +96,19 @@
+       <option name="presentableId" value="Default" />
+       <updated>1778210206470</updated>
+     </task>
++    <task id="LOCAL-00001" summary="initial commit">
++      <option name="closed" value="true" />
++      <created>1778257045245</created>
++      <option name="number" value="00001" />
++      <option name="presentableId" value="LOCAL-00001" />
++      <option name="project" value="LOCAL" />
++      <updated>1778257045245</updated>
++    </task>
++    <option name="localTasksCounter" value="2" />
+     <servers />
+   </component>
++  <component name="VcsManagerConfiguration">
++    <MESSAGE value="initial commit" />
++    <option name="LAST_COMMIT_MESSAGE" value="initial commit" />
++  </component>
+ </project>
+\ No newline at end of file
